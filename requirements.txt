@@ -1,0 +1,23 @@
+# Web Framework & APIs
+fastapi[all]
+uvicorn
+python-multipart
+
+# Data Processing
+pandas
+numpy
+
+# Database ORM & Driver
+sqlalchemy
+psycopg2-binary
+
+# Agentic AI & LLMs
+langgraph
+langchain
+langchain-openai
+langchain-google-genai
+
+# Config & Validation
+pydantic
+pydantic-settings
+python-dotenv
