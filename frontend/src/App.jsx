@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
   Upload, Database, AlertCircle, MessageSquare, 
-  Send, Activity, Layers, Hash, FileCheck 
+  Send, Activity, Layers, Hash, FileCheck, Maximize2
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
 
 export default function App() {
+  // Existing States
   const [file, setFile] = useState(null);
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -16,8 +17,30 @@ export default function App() {
   const [chatHistory, setChatHistory] = useState([]);
   const [isChatting, setIsChatting] = useState(false);
 
+  // New States for Dynamic Modal
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [dynamicChartData, setDynamicChartData] = useState({ columns: [], data: [] });
+  const [xAxis, setXAxis] = useState('');
+  const [yAxis, setYAxis] = useState('');
+
+  // Fetch Dynamic Data when Modal Opens
+  useEffect(() => {
+    if (isModalOpen) {
+      fetch('http://localhost:8000/api/dataset/visualize')
+        .then(res => res.json())
+        .then(data => {
+          setDynamicChartData(data);
+          if (data.columns && data.columns.length >= 2) {
+            setXAxis(data.columns[0]);
+            setYAxis(data.columns[1]);
+          }
+        })
+        .catch(err => console.error("Error fetching chart data:", err));
+    }
+  }, [isModalOpen]);
+
   // Structural mock data for the aesthetic Recharts implementation
-  const chartData = [
+  const staticChartData = [
     { name: 'Mon', anomalies: 12, baseline: 45 },
     { name: 'Tue', anomalies: 19, baseline: 52 },
     { name: 'Wed', anomalies: 15, baseline: 48 },
@@ -42,7 +65,6 @@ export default function App() {
       setReport({
         ...response.data,
         filepath: `data/${file.name}`,
-        // Appending foundational structural metrics dynamically
         columns: 11,
         missing: 0,
         duplicates: 14
@@ -76,7 +98,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0E14] text-white p-6 font-sans">
+    <div className="min-h-screen bg-[#0B0E14] text-white p-6 font-sans relative">
       {/* Top Navbar */}
       <header className="flex items-center justify-between pb-6 border-b border-white/10 mb-6">
         <div className="flex items-center gap-3">
@@ -152,10 +174,20 @@ export default function App() {
             
             {/* Glowing Recharts Component */}
             <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6">
-              <h3 className="text-lg font-medium mb-6 text-gray-200">Operations Variance Trend</h3>
+              
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-medium text-gray-200">Operations Variance Trend</h3>
+                <button 
+                  onClick={() => setIsModalOpen(true)}
+                  className="bg-indigo-600/80 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-2"
+                >
+                  <Maximize2 size={14} /> Expand Analysis
+                </button>
+              </div>
+
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData}>
+                  <AreaChart data={staticChartData}>
                     <defs>
                       <linearGradient id="colorAnomalies" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4}/>
@@ -232,6 +264,63 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      {/* NEW: The Glassmorphism Modal Overlay */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-11/12 h-5/6 bg-[#0B0E14]/95 border border-white/10 rounded-2xl p-6 shadow-2xl flex flex-col">
+            
+            {/* Header & Close Button */}
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-semibold text-white">Dynamic Data Explorer</h2>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="text-gray-400 hover:text-white transition-colors text-xl font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Dropdown Controls */}
+            <div className="flex gap-6 mb-6 bg-white/5 p-4 rounded-xl border border-white/10">
+              <div className="flex flex-col flex-1">
+                <label className="text-sm text-gray-400 mb-2">X-Axis (Independent Variable)</label>
+                <select 
+                  className="bg-[#0B0E14] border border-gray-700 text-white p-2.5 rounded-lg focus:outline-none focus:border-indigo-500 transition-colors"
+                  value={xAxis}
+                  onChange={(e) => setXAxis(e.target.value)}
+                >
+                  {dynamicChartData.columns.map(col => (
+                    <option key={col} value={col}>{col}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col flex-1">
+                <label className="text-sm text-gray-400 mb-2">Y-Axis (Dependent Variable)</label>
+                <select 
+                  className="bg-[#0B0E14] border border-gray-700 text-white p-2.5 rounded-lg focus:outline-none focus:border-indigo-500 transition-colors"
+                  value={yAxis}
+                  onChange={(e) => setYAxis(e.target.value)}
+                >
+                  {dynamicChartData.columns.map(col => (
+                    <option key={col} value={col}>{col}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Chart Container Placeholder */}
+            <div className="flex-1 bg-black/40 rounded-xl border border-white/10 flex flex-col items-center justify-center">
+              <Activity className="text-indigo-500 mb-4 opacity-70" size={48} />
+              <p className="text-gray-400 text-lg">Dynamic Recharts engine will render here...</p>
+              <p className="text-indigo-400 text-sm mt-2 font-medium">Plotting {xAxis || "..."} vs {yAxis || "..."}</p>
+            </div>
+            
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -1,5 +1,7 @@
 import os
 import shutil
+import pandas as pd
+from fastapi import APIRouter, HTTPException
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 from langchain_core.messages import HumanMessage
@@ -63,3 +65,19 @@ def chat_with_agent(query: str, file_path: str = "data/Updated_Car_Sales_Data.cs
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Agent workflow failed.")
+
+# ... existing code ...
+
+@router.get("/dataset/visualize")
+def get_visualization_data(file_path: str = "data/Updated_Car_Sales_Data.csv"):
+    try:
+        df = pd.read_csv(file_path)
+        df = df.fillna("") # Clean NaN values for JSON safety
+        
+        return {
+            "columns": df.columns.tolist(),
+            "data": df.to_dict(orient="records")
+        }
+    except Exception as e:
+        print(f"VISUALIZATION ERROR: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to load dataset for visualization.")
