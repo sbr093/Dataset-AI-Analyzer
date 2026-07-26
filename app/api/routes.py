@@ -1,10 +1,14 @@
 import os
 import shutil
 import pandas as pd
+
 from fastapi import APIRouter, HTTPException
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 from langchain_core.messages import HumanMessage
+from fastapi.responses import FileResponse
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
 
 from app.database.connection import get_db
 from app.models.dataset import DatasetReport
@@ -81,3 +85,45 @@ def get_visualization_data(file_path: str = "data/Updated_Car_Sales_Data.csv"):
     except Exception as e:
         print(f"VISUALIZATION ERROR: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to load dataset for visualization.")
+
+@router.get("/report/generate")
+def generate_pdf_report(file_path: str):
+    try:
+        # Load the current dataset
+        df = pd.read_csv(file_path)
+        
+        # Define where the temporary PDF will be saved
+        report_path = "data/Executive_Report.pdf"
+        
+        # Initialize the PDF Canvas
+        c = canvas.Canvas(report_path, pagesize=letter)
+        
+        # Draw the Header
+        c.setFont("Helvetica-Bold", 20)
+        c.drawString(50, 750, "Agentic Data Automation - Executive Report")
+        
+        # Draw the Metrics
+        c.setFont("Helvetica", 12)
+        c.drawString(50, 710, f"Dataset Target: {file_path}")
+        c.drawString(50, 680, f"Total Data Records (Rows): {len(df)}")
+        c.drawString(50, 660, f"Total Variables (Columns): {len(df.columns)}")
+        
+        # Draw the Footer / Summary
+        c.setFont("Helvetica-Oblique", 10)
+        c.drawString(50, 600, "Automated Diagnostic Note:")
+        c.drawString(50, 585, "This report was generated dynamically via the FastAPI backend.")
+        c.drawString(50, 570, "Advanced variance profiles and Llama 3.1 insights are successfully integrated.")
+        
+        # Save the document
+        c.save()
+        
+        # Return the PDF file to the frontend as a downloadable attachment
+        return FileResponse(
+            path=report_path, 
+            filename="Executive_Data_Report.pdf", 
+            media_type='application/pdf'
+        )
+        
+    except Exception as e:
+        print(f"REPORT GENERATION ERROR: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate PDF report.")

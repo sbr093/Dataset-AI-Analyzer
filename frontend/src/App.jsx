@@ -123,13 +123,30 @@ export default function App() {
     }
   };
 
-  // NEW: Placeholder function for triggering the backend PDF generator
+  // Live function for triggering the backend PDF generator
   const handleGenerateReport = async () => {
+    if (!report?.filepath) return;
+    
     setIsGeneratingReport(true);
     try {
-      // We will connect this to the FastAPI backend in the next step
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Mock delay
-      console.log("Triggering PDF generation on backend...");
+      // Hit the FastAPI endpoint, ensuring we tell Axios to expect a raw file (blob)
+      const response = await axios.get(
+        `http://127.0.0.1:8000/api/report/generate?file_path=${encodeURIComponent(report.filepath)}`,
+        { responseType: 'blob' }
+      );
+      
+      // Create a temporary URL for the downloaded blob
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      
+      // Create a hidden anchor tag, attach the URL, and force a click to download
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'Executive_Data_Report.pdf');
+      document.body.appendChild(link);
+      link.click();
+      
+      // Clean up the DOM
+      link.parentNode.removeChild(link);
     } catch (error) {
       console.error('Error generating report:', error);
     } finally {
@@ -192,7 +209,7 @@ export default function App() {
             )}
           </div>
 
-          {/* NEW Widget 2: Report Generation */}
+          {/* Widget 2: Report Generation */}
           <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 h-fit">
             <h2 className="text-lg font-medium mb-2 flex items-center gap-2">
               <FileText size={20} className="text-indigo-400" />
