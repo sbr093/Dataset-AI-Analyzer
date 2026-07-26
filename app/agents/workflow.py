@@ -1,17 +1,15 @@
 import os
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
-from langchain_openai import ChatOpenAI
+from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, HumanMessage
 from app.agents.state import AgentState
 from app.agents.tools import analyze_dataset_tool
-from dotenv import load_dotenv
-
-load_dotenv()
 
 # 1. Initialize the LLM
 # We use a standard temperature of 0 for deterministic, analytical answers.
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+# Initialize the local Ollama model
+llm = ChatOllama(model="llama3.1", temperature=0)
 
 # Bind the tool to the LLM so it knows it can execute the Pandas logic
 tools = [analyze_dataset_tool]
@@ -27,12 +25,22 @@ Do not hallucinate data."""
 # 3. Define the Core Agent Node
 def agent_node(state: AgentState):
     messages = state.get("messages", [])
+    file_path = state.get("current_file_path", "")
     
-    # Ensure the system prompt is always guiding the behavior
-    if not messages or not isinstance(messages[0], SystemMessage):
-        messages = [SystemMessage(content=SYSTEM_PROMPT)] + messages
+    # Dynamically inform the LLM of the active dataset path
+    dynamic_system_prompt = SYSTEM_PROMPT
+    if file_path:
+        dynamic_system_prompt += (
+            f"\n\nActive Dataset File Path: '{file_path}'\n"
+            f"When invoking dataset analysis tools, always pass '{file_path}' as the file path parameter."
+        )
         
-    # The LLM processes the conversation history and decides the next action
+    # Ensure the dynamic system message is at the beginning of the context
+    if not messages or not isinstance(messages[0], SystemMessage):
+        messages = [SystemMessage(content=dynamic_system_prompt)] + messages
+    else:
+        messages[0] = SystemMessage(content=dynamic_system_prompt)
+        
     response = llm_with_tools.invoke(messages)
     return {"messages": [response]}
 
