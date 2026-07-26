@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { 
   Upload, Database, AlertCircle, MessageSquare, 
-  Send, Activity, Layers, Hash, FileCheck, Maximize2
+  Send, Activity, Layers, Hash, FileCheck, Maximize2, FileText, Download
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
@@ -16,6 +16,7 @@ export default function App() {
   const [chatQuery, setChatQuery] = useState('');
   const [chatHistory, setChatHistory] = useState([]);
   const [isChatting, setIsChatting] = useState(false);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false); // NEW STATE
 
   // States for Dynamic Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -46,7 +47,6 @@ export default function App() {
 
     const groupedData = {};
 
-    // Group by X-axis and find Min/Max for the Y-axis
     dynamicChartData.data.forEach(row => {
       const xValue = row[xAxis];
       const yValue = Number(row[yAxis]);
@@ -60,14 +60,12 @@ export default function App() {
       }
     });
 
-    // Convert grouped data into an array formatted for a Recharts Range Area
     return Object.entries(groupedData).map(([key, value]) => ({
       [xAxis]: key,
       [`${yAxis}Range`]: [value.min, value.max] 
     }));
   }, [dynamicChartData.data, xAxis, yAxis]);
 
-  // Structural mock data for the aesthetic Recharts implementation
   const staticChartData = [
     { name: 'Mon', anomalies: 12, baseline: 45 },
     { name: 'Tue', anomalies: 19, baseline: 52 },
@@ -125,6 +123,20 @@ export default function App() {
     }
   };
 
+  // NEW: Placeholder function for triggering the backend PDF generator
+  const handleGenerateReport = async () => {
+    setIsGeneratingReport(true);
+    try {
+      // We will connect this to the FastAPI backend in the next step
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Mock delay
+      console.log("Triggering PDF generation on backend...");
+    } catch (error) {
+      console.error('Error generating report:', error);
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0B0E14] text-white p-6 font-sans relative flex flex-col">
       {/* Top Navbar */}
@@ -138,42 +150,74 @@ export default function App() {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 flex-1">
-        {/* Left Sidebar - File Upload Interface */}
-        <div className="lg:col-span-1 bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 h-fit">
-          <h2 className="text-lg font-medium mb-4 flex items-center gap-2">
-            <Database size={20} className="text-indigo-400" />
-            Dataset Management
-          </h2>
-          <form onSubmit={handleUpload} className="space-y-4">
-            <div className="border-2 border-dashed border-white/20 rounded-xl p-6 text-center hover:bg-white/5 transition-colors cursor-pointer">
-              <input 
-                type="file" 
-                accept=".csv"
-                onChange={(e) => setFile(e.target.files[0])}
-                className="hidden" 
-                id="file-upload" 
-              />
-              <label htmlFor="file-upload" className="cursor-pointer flex flex-col items-center">
-                <Upload size={32} className="text-gray-400 mb-2" />
-                <span className="text-sm text-gray-300">
-                  {file ? file.name : 'Click to select CSV'}
-                </span>
-              </label>
-            </div>
+        
+        {/* Left Sidebar Column - Now containing multiple stacked widgets */}
+        <div className="lg:col-span-1 flex flex-col gap-6">
+          
+          {/* Widget 1: Dataset Management */}
+          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 h-fit">
+            <h2 className="text-lg font-medium mb-4 flex items-center gap-2">
+              <Database size={20} className="text-indigo-400" />
+              Dataset Management
+            </h2>
+            <form onSubmit={handleUpload} className="space-y-4">
+              <div className="border-2 border-dashed border-white/20 rounded-xl p-6 text-center hover:bg-white/5 transition-colors cursor-pointer">
+                <input 
+                  type="file" 
+                  accept=".csv"
+                  onChange={(e) => setFile(e.target.files[0])}
+                  className="hidden" 
+                  id="file-upload" 
+                />
+                <label htmlFor="file-upload" className="cursor-pointer flex flex-col items-center">
+                  <Upload size={32} className="text-gray-400 mb-2" />
+                  <span className="text-sm text-gray-300">
+                    {file ? file.name : 'Click to select CSV'}
+                  </span>
+                </label>
+              </div>
+              <button 
+                type="submit"
+                disabled={!file || loading}
+                className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {loading ? 'Processing Backend Calculations...' : 'Process Dataset'}
+              </button>
+            </form>
+            {report && (
+              <div className="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center gap-2 text-emerald-400 text-sm">
+                <FileCheck size={18} />
+                Dataset structured and analyzed
+              </div>
+            )}
+          </div>
+
+          {/* NEW Widget 2: Report Generation */}
+          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 h-fit">
+            <h2 className="text-lg font-medium mb-2 flex items-center gap-2">
+              <FileText size={20} className="text-indigo-400" />
+              Executive Report
+            </h2>
+            <p className="text-sm text-gray-400 mb-5">
+              Compile dataset statistics and variance relationships into a formal PDF report.
+            </p>
             <button 
-              type="submit"
-              disabled={!file || loading}
-              className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+              onClick={handleGenerateReport}
+              disabled={!report || isGeneratingReport}
+              className="w-full py-3 bg-white/10 hover:bg-white/15 border border-white/10 rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {loading ? 'Processing Backend Calculations...' : 'Process Dataset'}
+              {isGeneratingReport ? (
+                <>
+                  <Activity size={18} className="animate-spin text-indigo-400" /> Compiling PDF...
+                </>
+              ) : (
+                <>
+                  <Download size={18} className="text-indigo-400" /> Generate PDF Report
+                </>
+              )}
             </button>
-          </form>
-          {report && (
-            <div className="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-center gap-2 text-emerald-400 text-sm">
-              <FileCheck size={18} />
-              Dataset structured and analyzed
-            </div>
-          )}
+          </div>
+
         </div>
 
         {/* Main Interface */}
@@ -197,7 +241,7 @@ export default function App() {
             ))}
           </div>
 
-          {/* Interactive Modules - Now set to flex-1 to stretch and fill the remaining height */}
+          {/* Interactive Modules */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 flex-1">
             
             {/* Glowing Recharts Component */}
@@ -213,7 +257,6 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Flex-1 ensures the chart uses all available vertical space */}
               <div className="flex-1 w-full min-h-[0]">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={staticChartData}>
@@ -299,7 +342,6 @@ export default function App() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="w-11/12 h-5/6 bg-[#0B0E14]/95 border border-white/10 rounded-2xl p-6 shadow-2xl flex flex-col">
             
-            {/* Header & Close Button */}
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-semibold text-white">Dynamic Data Explorer</h2>
               <button 
@@ -310,7 +352,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Dropdown Controls */}
             <div className="flex gap-6 mb-6 bg-white/5 p-4 rounded-xl border border-white/10">
               <div className="flex flex-col flex-1">
                 <label className="text-sm text-gray-400 mb-2">X-Axis (Independent Variable)</label>
@@ -319,7 +360,7 @@ export default function App() {
                   value={xAxis}
                   onChange={(e) => {
                     setXAxis(e.target.value);
-                    setIsPlotted(false); // Reset plot state on change
+                    setIsPlotted(false);
                   }}
                 >
                   {dynamicChartData.columns.map(col => (
@@ -335,7 +376,7 @@ export default function App() {
                   value={yAxis}
                   onChange={(e) => {
                     setYAxis(e.target.value);
-                    setIsPlotted(false); // Reset plot state on change
+                    setIsPlotted(false);
                   }}
                 >
                   {dynamicChartData.columns.map(col => (
@@ -344,7 +385,6 @@ export default function App() {
                 </select>
               </div>
 
-              {/* The Plot Button */}
               <div className="flex flex-col justify-end">
                 <button 
                   onClick={() => setIsPlotted(true)}
@@ -356,7 +396,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Dynamic Chart Container */}
             <div className="flex-1 bg-[#0B0E14]/50 rounded-xl border border-white/10 flex flex-col p-4">
               {!isPlotted ? (
                 <div className="h-full flex flex-col items-center justify-center">
