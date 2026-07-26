@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { 
   Upload, Database, AlertCircle, MessageSquare, 
@@ -17,11 +17,12 @@ export default function App() {
   const [chatHistory, setChatHistory] = useState([]);
   const [isChatting, setIsChatting] = useState(false);
 
-  // New States for Dynamic Modal
+  // States for Dynamic Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [dynamicChartData, setDynamicChartData] = useState({ columns: [], data: [] });
   const [xAxis, setXAxis] = useState('');
   const [yAxis, setYAxis] = useState('');
+  const [isPlotted, setIsPlotted] = useState(false);
 
   // Fetch Dynamic Data when Modal Opens
   useEffect(() => {
@@ -38,6 +39,34 @@ export default function App() {
         .catch(err => console.error("Error fetching chart data:", err));
     }
   }, [isModalOpen]);
+
+  // NEW: Process Data to Find the Min and Max Range for the Chart
+  const chartDataToRender = useMemo(() => {
+    if (!dynamicChartData.data || dynamicChartData.data.length === 0 || !xAxis || !yAxis) return [];
+
+    const groupedData = {};
+
+    // Group by X-axis and find Min/Max for the Y-axis
+    dynamicChartData.data.forEach(row => {
+      const xValue = row[xAxis];
+      const yValue = Number(row[yAxis]);
+
+      if (xValue !== undefined && !isNaN(yValue)) {
+        if (!groupedData[xValue]) {
+          groupedData[xValue] = { min: yValue, max: yValue };
+        }
+        groupedData[xValue].min = Math.min(groupedData[xValue].min, yValue);
+        groupedData[xValue].max = Math.max(groupedData[xValue].max, yValue);
+      }
+    });
+
+    // Convert grouped data into an array formatted for a Recharts Range Area
+    return Object.entries(groupedData).map(([key, value]) => ({
+      [xAxis]: key,
+      // Recharts accepts an array of [bottomBoundary, topBoundary] to draw a range band
+      [`${yAxis}Range`]: [value.min, value.max] 
+    }));
+  }, [dynamicChartData.data, xAxis, yAxis]);
 
   // Structural mock data for the aesthetic Recharts implementation
   const staticChartData = [
@@ -288,7 +317,10 @@ export default function App() {
                 <select 
                   className="bg-[#0B0E14] border border-gray-700 text-white p-2.5 rounded-lg focus:outline-none focus:border-indigo-500 transition-colors"
                   value={xAxis}
-                  onChange={(e) => setXAxis(e.target.value)}
+                  onChange={(e) => {
+                    setXAxis(e.target.value);
+                    setIsPlotted(false); // Reset plot state on change
+                  }}
                 >
                   {dynamicChartData.columns.map(col => (
                     <option key={col} value={col}>{col}</option>
@@ -301,22 +333,90 @@ export default function App() {
                 <select 
                   className="bg-[#0B0E14] border border-gray-700 text-white p-2.5 rounded-lg focus:outline-none focus:border-indigo-500 transition-colors"
                   value={yAxis}
-                  onChange={(e) => setYAxis(e.target.value)}
+                  onChange={(e) => {
+                    setYAxis(e.target.value);
+                    setIsPlotted(false); // Reset plot state on change
+                  }}
                 >
                   {dynamicChartData.columns.map(col => (
                     <option key={col} value={col}>{col}</option>
                   ))}
                 </select>
               </div>
+
+              {/* NEW: The Plot Button */}
+              <div className="flex flex-col justify-end">
+                <button 
+                  onClick={() => setIsPlotted(true)}
+                  disabled={!xAxis || !yAxis || isPlotted}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-8 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed h-[46px]"
+                >
+                  Generate Plot
+                </button>
+              </div>
             </div>
 
-            {/* Chart Container Placeholder */}
-            <div className="flex-1 bg-black/40 rounded-xl border border-white/10 flex flex-col items-center justify-center">
-              <Activity className="text-indigo-500 mb-4 opacity-70" size={48} />
-              <p className="text-gray-400 text-lg">Dynamic Recharts engine will render here...</p>
-              <p className="text-indigo-400 text-sm mt-2 font-medium">Plotting {xAxis || "..."} vs {yAxis || "..."}</p>
+            {/* Dynamic Chart Container */}
+            <div className="flex-1 bg-[#0B0E14]/50 rounded-xl border border-white/10 flex flex-col p-4">
+              {!isPlotted ? (
+                <div className="h-full flex flex-col items-center justify-center">
+                  <Activity className="text-gray-600 mb-4 opacity-50" size={48} />
+                  <p className="text-gray-400 text-lg">Select your variables and click <span className="text-indigo-400 font-medium">Generate Plot</span></p>
+                </div>
+              ) : (
+                <div className="h-full w-full flex flex-col">
+                  <h3 className="text-gray-300 font-medium mb-4 text-center">
+                    Variance Profile: {xAxis} vs {yAxis}
+                  </h3>
+                  <div className="flex-1 w-full min-h-[0]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={chartDataToRender} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorDynamic" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.6}/>
+                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0.1}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                        <XAxis 
+                          dataKey={xAxis} 
+                          stroke="#ffffff50" 
+                          axisLine={false} 
+                          tickLine={false}
+                          tick={{ fill: '#94a3b8', fontSize: 12 }}
+                          minTickGap={30}
+                        />
+                        <YAxis 
+                          stroke="#ffffff50" 
+                          axisLine={false} 
+                          tickLine={false}
+                          tick={{ fill: '#94a3b8', fontSize: 12 }}
+                        />
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #ffffff10', borderRadius: '12px', color: '#fff' }} 
+                          itemStyle={{ color: '#e2e8f0' }}
+                          labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
+                          formatter={(value) => {
+                            // Format the tooltip so it cleanly says [Min, Max] instead of a raw array
+                            return Array.isArray(value) ? `Min: ${value[0]} - Max: ${value[1]}` : value;
+                          }}
+                        />
+                        {/* UPDATE: dataKey mapped to our dynamic range array */}
+                        <Area 
+                          type="monotone" 
+                          dataKey={`${yAxis}Range`} 
+                          stroke="#6366f1" 
+                          strokeWidth={2} 
+                          fillOpacity={1} 
+                          fill="url(#colorDynamic)" 
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
             </div>
-            
+
           </div>
         </div>
       )}
