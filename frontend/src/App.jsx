@@ -40,7 +40,7 @@ export default function App() {
     }
   }, [isModalOpen]);
 
-  // NEW: Process Data to Find the Min and Max Range for the Chart
+  // Process Data to Find the Min and Max Range for the Chart
   const chartDataToRender = useMemo(() => {
     if (!dynamicChartData.data || dynamicChartData.data.length === 0 || !xAxis || !yAxis) return [];
 
@@ -63,7 +63,6 @@ export default function App() {
     // Convert grouped data into an array formatted for a Recharts Range Area
     return Object.entries(groupedData).map(([key, value]) => ({
       [xAxis]: key,
-      // Recharts accepts an array of [bottomBoundary, topBoundary] to draw a range band
       [`${yAxis}Range`]: [value.min, value.max] 
     }));
   }, [dynamicChartData.data, xAxis, yAxis]);
@@ -127,7 +126,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0E14] text-white p-6 font-sans relative">
+    <div className="min-h-screen bg-[#0B0E14] text-white p-6 font-sans relative flex flex-col">
       {/* Top Navbar */}
       <header className="flex items-center justify-between pb-6 border-b border-white/10 mb-6">
         <div className="flex items-center gap-3">
@@ -138,7 +137,7 @@ export default function App() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 flex-1">
         {/* Left Sidebar - File Upload Interface */}
         <div className="lg:col-span-1 bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 h-fit">
           <h2 className="text-lg font-medium mb-4 flex items-center gap-2">
@@ -178,7 +177,7 @@ export default function App() {
         </div>
 
         {/* Main Interface */}
-        <div className="lg:col-span-3 space-y-6">
+        <div className="lg:col-span-3 space-y-6 flex flex-col">
           
           {/* High-Level Metric Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -198,11 +197,11 @@ export default function App() {
             ))}
           </div>
 
-          {/* Interactive Modules */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          {/* Interactive Modules - Now set to flex-1 to stretch and fill the remaining height */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 flex-1">
             
             {/* Glowing Recharts Component */}
-            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6">
+            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 flex flex-col min-h-[500px] xl:h-[calc(100vh-260px)]">
               
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-lg font-medium text-gray-200">Operations Variance Trend</h3>
@@ -214,7 +213,8 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="h-[300px] w-full">
+              {/* Flex-1 ensures the chart uses all available vertical space */}
+              <div className="flex-1 w-full min-h-[0]">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={staticChartData}>
                     <defs>
@@ -237,7 +237,7 @@ export default function App() {
             </div>
 
             {/* Custom Query AI Chatbot */}
-            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl flex flex-col h-[400px]">
+            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl flex flex-col min-h-[500px] xl:h-[calc(100vh-260px)]">
               <div className="p-4 border-b border-white/10 flex items-center gap-2">
                 <MessageSquare size={18} className="text-indigo-400" />
                 <h3 className="font-medium text-gray-200">Custom Analysis Agent</h3>
@@ -294,7 +294,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* NEW: The Glassmorphism Modal Overlay */}
+      {/* The Glassmorphism Modal Overlay */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="w-11/12 h-5/6 bg-[#0B0E14]/95 border border-white/10 rounded-2xl p-6 shadow-2xl flex flex-col">
@@ -344,7 +344,7 @@ export default function App() {
                 </select>
               </div>
 
-              {/* NEW: The Plot Button */}
+              {/* The Plot Button */}
               <div className="flex flex-col justify-end">
                 <button 
                   onClick={() => setIsPlotted(true)}
@@ -397,11 +397,9 @@ export default function App() {
                           itemStyle={{ color: '#e2e8f0' }}
                           labelStyle={{ color: '#94a3b8', marginBottom: '4px' }}
                           formatter={(value) => {
-                            // Format the tooltip so it cleanly says [Min, Max] instead of a raw array
                             return Array.isArray(value) ? `Min: ${value[0]} - Max: ${value[1]}` : value;
                           }}
                         />
-                        {/* UPDATE: dataKey mapped to our dynamic range array */}
                         <Area 
                           type="monotone" 
                           dataKey={`${yAxis}Range`} 
