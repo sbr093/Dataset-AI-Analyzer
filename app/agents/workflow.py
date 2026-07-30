@@ -5,6 +5,7 @@ from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, HumanMessage
 from app.agents.state import AgentState
 from app.agents.tools import analyze_dataset_tool
+from app.agents.tools import summarize_dataset_tool, generate_chart_tool
 
 # 1. Initialize the LLM
 # We use a standard temperature of 0 for deterministic, analytical answers.
@@ -12,7 +13,7 @@ from app.agents.tools import analyze_dataset_tool
 llm = ChatOllama(model="llama3.1", temperature=0)
 
 # Bind the tool to the LLM so it knows it can execute the Pandas logic
-tools = [analyze_dataset_tool]
+tools = [analyze_dataset_tool, summarize_dataset_tool, generate_chart_tool]
 llm_with_tools = llm.bind_tools(tools)
 
 # 2. Define the System Prompt (Intent Guardrails & Persona)
