@@ -5,7 +5,7 @@ from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, HumanMessage
 from app.agents.state import AgentState
 from app.agents.tools import analyze_dataset_tool
-from app.agents.tools import summarize_dataset_tool, generate_chart_tool
+from app.agents.tools import summarize_dataset_tool, generate_chart_tool, detect_anomalies_tool, save_report_tool
 
 # 1. Initialize the LLM
 # We use a standard temperature of 0 for deterministic, analytical answers.
@@ -13,8 +13,17 @@ from app.agents.tools import summarize_dataset_tool, generate_chart_tool
 llm = ChatOllama(model="llama3.1", temperature=0)
 
 # Bind the tool to the LLM so it knows it can execute the Pandas logic
-tools = [analyze_dataset_tool, summarize_dataset_tool, generate_chart_tool]
+tools = [analyze_dataset_tool, summarize_dataset_tool, generate_chart_tool, detect_anomalies_tool, save_report_tool]
 llm_with_tools = llm.bind_tools(tools)
+
+# Provide the LLM a compact schema description for expected tool outputs to reduce hallucination
+TOOL_SCHEMA = """
+Tool outputs follow these JSON shapes (examples):
+- dataset_summary: {"type":"dataset_summary","rows":1234,"columns":12,"missing_values":10,"anomaly_count":2}
+- anomalies: {"type":"anomalies","count":3,"items":[{"column":"sales","row_index":123,"value":450.0,"reason":"zscore"}]}
+- chart: {"type":"chart","x":"region","y":"sales","chart_data":[{"region":"APAC","value":123.4,"count":10}],"insights":{}}
+- save_report: {"type":"save_report","id":42,"status":"ok"}
+"""
 
 # 2. Define the System Prompt (Intent Guardrails & Persona)
 SYSTEM_PROMPT = """You are a Senior Data Analysis AI Assistant. 
