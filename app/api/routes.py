@@ -5,6 +5,7 @@ import pandas as pd
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 from pydantic import BaseModel
+import json
 from sqlalchemy.orm import Session
 from langchain_core.messages import HumanMessage
 from fastapi.responses import FileResponse
@@ -122,7 +123,20 @@ def chat_with_agent(request: ChatRequest):
         }
 
         result = app_workflow.invoke(initial_state)
-        return {"response": result["messages"][-1].content}
+        # Attempt to parse a structured JSON response if the agent returned one
+        final_msg = result.get("messages", [])[ -1 ]
+        content = getattr(final_msg, "content", "")
+        structured = None
+        try:
+            parsed = json.loads(content)
+            if isinstance(parsed, dict) and parsed.get("type") in ("dataset_summary", "anomalies", "chart", "save_report"):
+                structured = parsed
+        except Exception:
+            structured = None
+
+        if structured:
+            return {"response": content, "structured": structured}
+        return {"response": content}
     except Exception as e:
         print(f"LANGGRAPH AI ERROR: {str(e)}")
         traceback.print_exc()

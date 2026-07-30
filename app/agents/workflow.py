@@ -38,7 +38,8 @@ def agent_node(state: AgentState):
     file_path = state.get("current_file_path", "")
     
     # Dynamically inform the LLM of the active dataset path
-    dynamic_system_prompt = SYSTEM_PROMPT
+    # include TOOL_SCHEMA guidance to reduce hallucinated or malformed tool outputs
+    dynamic_system_prompt = SYSTEM_PROMPT + "\n\n" + TOOL_SCHEMA
     if file_path:
         dynamic_system_prompt += (
             f"\n\nActive Dataset File Path: '{file_path}'\n"
