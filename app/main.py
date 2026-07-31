@@ -23,3 +23,12 @@ app.include_router(router, prefix="/api")
 @app.get("/")
 def root():
     return {"message": "Agentic AI System is Online and Ready."}
+
+
+@app.get("/health")
+def health_check():
+    return {
+        "status": "ok",
+        "service": "agentic-data-api",
+        "version": app.version,
+    }
