@@ -46,8 +46,17 @@ def build_dataset_summary(analysis_result: dict) -> dict:
     }
 
 
+def get_cached_dataset_report(db: Session, filename: str):
+    return (
+        db.query(DatasetReport)
+        .filter(DatasetReport.filename == filename)
+        .order_by(DatasetReport.created_at.desc())
+        .first()
+    )
+
+
 @router.post("/upload")
-def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
+def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db), force_refresh: bool = False):
     """Uploads a CSV, analyzes it via Pandas, and returns the exact frontend contract."""
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only CSV files are allowed.")
@@ -56,6 +65,26 @@ def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
 
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
+
+    cached_report = None
+    if not force_refresh:
+        cached_report = get_cached_dataset_report(db, file.filename)
+
+    if cached_report:
+        return {
+            "message": "Loaded cached analysis",
+            "filename": cached_report.filename,
+            "filepath": file_path,
+            "cached": True,
+            "total_rows": cached_report.total_rows,
+            "anomaly_count": cached_report.anomaly_count,
+            "statistical_summary": cached_report.statistical_summary,
+            "dataset_summary": {
+                "total_rows": cached_report.total_rows,
+                "anomaly_count": cached_report.anomaly_count,
+                "statistical_summary": cached_report.statistical_summary,
+            },
+        }
 
     try:
         analysis_result = analyze_csv_data(file_path)
@@ -93,6 +122,7 @@ def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
         "message": "File uploaded successfully",
         "filename": file.filename,
         "filepath": file_path,
+        "cached": False,
         "total_rows": analysis_result["total_rows"],
         "columns": analysis_result["total_columns"],
         "missing": analysis_result["total_missing_values"],
@@ -105,6 +135,22 @@ def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
         "detailed_anomalies": analysis_result.get("detailed_anomalies", {}),
         "statistical_summary": analysis_result["statistical_summary"],
         "dataset_summary": dataset_summary
+    }
+
+
+@router.get("/dataset/cache")
+def get_cached_dataset_analysis(filename: str, db: Session = Depends(get_db)):
+    report = get_cached_dataset_report(db, filename)
+    if not report:
+        raise HTTPException(status_code=404, detail="No cached analysis found for this filename.")
+
+    return {
+        "filename": report.filename,
+        "cached": True,
+        "total_rows": report.total_rows,
+        "anomaly_count": report.anomaly_count,
+        "statistical_summary": report.statistical_summary,
+        "created_at": report.created_at,
     }
 
 class ChatRequest(BaseModel):
