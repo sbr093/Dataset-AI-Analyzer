@@ -11,3 +11,6 @@ class AgentState(TypedDict):
     
     # Stores the statistical summary so the AI can answer questions about it
     dataset_summary: Dict[str, Any]
+
+    # Stores previous tool outputs for more agentic multi-step reasoning
+    tool_history: List[Dict[str, Any]]

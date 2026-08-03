@@ -6,6 +6,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from app.agents.state import AgentState
 from app.agents.tools import analyze_dataset_tool
 from app.agents.tools import summarize_dataset_tool, generate_chart_tool, detect_anomalies_tool, save_report_tool
+from app.agents.validation import validate_chart, validate_dataset_summary, validate_anomalies
 
 # 1. Initialize the LLM
 # We use a standard temperature of 0 for deterministic, analytical answers.
@@ -36,15 +37,21 @@ Do not hallucinate data."""
 def agent_node(state: AgentState):
     messages = state.get("messages", [])
     file_path = state.get("current_file_path", "")
+    tool_history = state.get("tool_history", [])
     
-    # Dynamically inform the LLM of the active dataset path
-    # include TOOL_SCHEMA guidance to reduce hallucinated or malformed tool outputs
+    # Dynamically inform the LLM of the active dataset path and past tool actions
     dynamic_system_prompt = SYSTEM_PROMPT + "\n\n" + TOOL_SCHEMA
     if file_path:
         dynamic_system_prompt += (
             f"\n\nActive Dataset File Path: '{file_path}'\n"
             f"When invoking dataset analysis tools, always pass '{file_path}' as the file path parameter."
         )
+
+    if tool_history:
+        dynamic_system_prompt += "\n\nPrevious tool outputs are available in state.tool_history. Use them to reason before calling a new tool."
+        for entry in tool_history[-3:]:
+            dynamic_system_prompt += f"\n- {entry.get('type', 'tool_output')}: {entry}"
+        dynamic_system_prompt += "\n"
         
     # Ensure the dynamic system message is at the beginning of the context
     if not messages or not isinstance(messages[0], SystemMessage):
@@ -63,7 +70,11 @@ def should_continue(state: AgentState) -> str:
     # If the LLM decided it needs to call a tool, route to the ToolNode
     if last_message.tool_calls:
         return "continue"
-    # Otherwise, the LLM has finished its thought process
+
+    # If a tool was just executed, allow one more agent interpretation pass
+    if state.get("last_tool_executed"):
+        return "end"
+
     return "end"
 
 # 5. Build the LangGraph State Machine
@@ -91,3 +102,4 @@ workflow.add_edge("tools", "agent")
 
 # Compile the graph into a runnable application
 app_workflow = workflow.compile()
+
