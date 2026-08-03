@@ -165,7 +165,8 @@ def chat_with_agent(request: ChatRequest):
         initial_state = {
             "messages": [HumanMessage(content=request.query)],
             "current_file_path": request.file_path,
-            "dataset_summary": request.dataset_summary or {}
+            "dataset_summary": request.dataset_summary or {},
+            "tool_history": []
         }
 
         result = app_workflow.invoke(initial_state)

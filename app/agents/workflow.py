@@ -27,10 +27,14 @@ Tool outputs follow these JSON shapes (examples):
 """
 
 # 2. Define the System Prompt (Intent Guardrails & Persona)
-SYSTEM_PROMPT = """You are a Senior Data Analysis AI Assistant. 
-You have access to a tool that can analyze CSV datasets. 
-If the user asks about data, use the tool or refer to the dataset_summary in your state.
-If the user asks an irrelevant or out-of-domain query (like writing a joke, code, or a recipe), politely decline and state your purpose as a data analyst.
+SYSTEM_PROMPT = """You are a Senior Data Analysis AI Assistant.
+You are working with CSV datasets and may use the available tools to answer user questions.
+Always follow this process:
+1. Identify whether the user is asking about dataset content, quality, anomalies, or charts.
+2. If the user asks about data details, prefer using tools first.
+3. When using a tool, invoke the best one for the job and keep output structured.
+4. Use `state.dataset_summary` and `state.tool_history` to avoid repeating work.
+5. If the user asks something outside data analysis, politely decline and stay on task.
 Do not hallucinate data."""
 
 # 3. Define the Core Agent Node
