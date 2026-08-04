@@ -63,10 +63,33 @@ def collect_tool_results(state: AgentState) -> dict:
     return {"tool_history": tool_history}
 
 
+def validate_tool_output(payload: dict) -> bool:
+    if not isinstance(payload, dict):
+        return False
+
+    if payload.get("type") == "dataset_summary":
+        return validate_dataset_summary(payload)
+    if payload.get("type") == "chart":
+        return validate_chart(payload)
+    if payload.get("type") == "anomalies":
+        return validate_anomalies(payload)
+    if payload.get("type") == "save_report":
+        return "status" in payload and "id" in payload
+    return False
+
+
 def capture_tool_results_node(state: AgentState) -> dict:
     updates = collect_tool_results(state)
-    if updates.get("tool_history"):
-        return {**updates, "last_tool_executed": True}
+    history = updates.get("tool_history", [])
+    valid_history = []
+
+    for entry in history:
+        payload = entry.get("payload") or {}
+        if validate_tool_output(payload):
+            valid_history.append(entry)
+
+    if valid_history:
+        return {"tool_history": valid_history, "last_tool_executed": True}
     return {"tool_history": list(state.get("tool_history", [])), "last_tool_executed": False}
 
 
