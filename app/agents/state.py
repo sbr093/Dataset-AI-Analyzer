@@ -14,3 +14,6 @@ class AgentState(TypedDict):
 
     # Stores previous tool outputs for more agentic multi-step reasoning
     tool_history: List[Dict[str, Any]]
+
+    # Tracks whether a tool execution just happened so the workflow can react to it
+    last_tool_executed: bool

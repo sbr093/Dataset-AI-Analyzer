@@ -4,6 +4,7 @@ from langgraph.prebuilt import ToolNode
 from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, HumanMessage
 from app.agents.state import AgentState
+import json
 from app.agents.tools import analyze_dataset_tool
 from app.agents.tools import summarize_dataset_tool, generate_chart_tool, detect_anomalies_tool, save_report_tool
 from app.agents.validation import validate_chart, validate_dataset_summary, validate_anomalies
@@ -36,6 +37,38 @@ Always follow this process:
 4. Use `state.dataset_summary` and `state.tool_history` to avoid repeating work.
 5. If the user asks something outside data analysis, politely decline and stay on task.
 Do not hallucinate data."""
+
+def collect_tool_results(state: AgentState) -> dict:
+    messages = state.get("messages", [])
+    tool_history = list(state.get("tool_history", []))
+
+    for message in reversed(messages):
+        if getattr(message, "type", "") != "tool":
+            continue
+
+        tool_name = getattr(message, "name", "unknown_tool")
+        tool_content = getattr(message, "content", "")
+        try:
+            parsed = json.loads(tool_content)
+        except Exception:
+            parsed = {"raw": tool_content}
+
+        tool_history.append({
+            "type": parsed.get("type", "tool_output"),
+            "tool_name": tool_name,
+            "payload": parsed,
+        })
+        break
+
+    return {"tool_history": tool_history}
+
+
+def capture_tool_results_node(state: AgentState) -> dict:
+    updates = collect_tool_results(state)
+    if updates.get("tool_history"):
+        return {**updates, "last_tool_executed": True}
+    return {"tool_history": list(state.get("tool_history", [])), "last_tool_executed": False}
+
 
 # 3. Define the Core Agent Node
 def agent_node(state: AgentState):
@@ -87,6 +120,7 @@ workflow = StateGraph(AgentState)
 # Add our nodes
 workflow.add_node("agent", agent_node)
 workflow.add_node("tools", ToolNode(tools))
+workflow.add_node("capture_tool_results", capture_tool_results_node)
 
 # Define the edges (how information flows)
 workflow.set_entry_point("agent")
@@ -101,8 +135,9 @@ workflow.add_conditional_edges(
     }
 )
 
-# After a tool runs, it must always go back to the agent to interpret the result
-workflow.add_edge("tools", "agent")
+# After a tool runs, capture the tool output into state and then hand back control to the agent.
+workflow.add_edge("tools", "capture_tool_results")
+workflow.add_edge("capture_tool_results", "agent")
 
 # Compile the graph into a runnable application
 app_workflow = workflow.compile()
