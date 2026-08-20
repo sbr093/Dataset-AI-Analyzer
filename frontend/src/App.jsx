@@ -180,7 +180,7 @@ export default function App() {
           <div className="p-2 bg-indigo-500/20 rounded-lg">
             <Activity className="text-indigo-400" size={24} />
           </div>
-          <h1 className="text-2xl font-semibold tracking-wide">Agentic Data Automation</h1>
+          <h1 className="text-2xl font-semibold tracking-wide">Dataset AI Analyzer</h1>
         </div>
       </header>
 

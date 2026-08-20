@@ -70,20 +70,35 @@ def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db), 
     if not force_refresh:
         cached_report = get_cached_dataset_report(db, file.filename)
 
-    if cached_report:
+    if cached_report and cached_report.total_columns is not None:
+        cached_analysis_result = {
+            "total_rows": cached_report.total_rows,
+            "total_columns": cached_report.total_columns,
+            "duplicate_rows": cached_report.duplicate_rows,
+            "total_missing_values": cached_report.total_missing_values,
+            "anomaly_count": cached_report.anomaly_count,
+            "data_quality_score": cached_report.data_quality_score,
+            "data_quality_label": cached_report.data_quality_label,
+            "data_quality_breakdown": cached_report.data_quality_breakdown,
+            "detailed_anomalies": (cached_report.statistical_summary or {}).get("detailed_anomalies", {}),
+            "statistical_summary": cached_report.statistical_summary,
+        }
         return {
             "message": "Loaded cached analysis",
             "filename": cached_report.filename,
             "filepath": file_path,
             "cached": True,
             "total_rows": cached_report.total_rows,
+            "columns": cached_report.total_columns,
+            "missing": cached_report.total_missing_values,
+            "duplicates": cached_report.duplicate_rows,
             "anomaly_count": cached_report.anomaly_count,
+            "data_quality_score": cached_report.data_quality_score,
+            "data_quality_label": cached_report.data_quality_label,
+            "data_quality_breakdown": cached_report.data_quality_breakdown,
+            "detailed_anomalies": cached_analysis_result["detailed_anomalies"],
             "statistical_summary": cached_report.statistical_summary,
-            "dataset_summary": {
-                "total_rows": cached_report.total_rows,
-                "anomaly_count": cached_report.anomaly_count,
-                "statistical_summary": cached_report.statistical_summary,
-            },
+            "dataset_summary": build_dataset_summary(cached_analysis_result),
         }
 
     try:
@@ -95,7 +110,13 @@ def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db), 
     db_report = DatasetReport(
         filename=file.filename,
         total_rows=analysis_result["total_rows"],
+        total_columns=analysis_result["total_columns"],
+        duplicate_rows=analysis_result["duplicate_rows"],
+        total_missing_values=analysis_result["total_missing_values"],
         anomaly_count=analysis_result["anomaly_count"],
+        data_quality_score=analysis_result.get("data_quality_score"),
+        data_quality_label=analysis_result.get("data_quality_label"),
+        data_quality_breakdown=analysis_result.get("data_quality_breakdown"),
         statistical_summary=analysis_result["statistical_summary"]
     )
     db.add(db_report)
