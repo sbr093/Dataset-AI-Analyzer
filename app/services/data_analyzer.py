@@ -3,18 +3,20 @@ import pandas as pd
 import numpy as np
 from typing import Dict, Any
 
+from app.services.file_loader import load_dataframe
+
 
 def analyze_csv_data(file_path: str) -> Dict[str, Any]:
-    """Read a CSV, compute robust dataset metrics, and detect z-score anomalies safely."""
+    """Read a supported dataset file, compute robust dataset metrics, and detect z-score anomalies safely."""
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Dataset not found: {file_path}")
     if os.path.isdir(file_path):
-        raise ValueError(f"Expected a CSV file path, got a directory: {file_path}")
+        raise ValueError(f"Expected a dataset file path, got a directory: {file_path}")
 
     try:
-        df = pd.read_csv(file_path, low_memory=False)
+        df = load_dataframe(file_path)
     except Exception as exc:
-        raise ValueError(f"Failed to read CSV file '{file_path}': {exc}") from exc
+        raise ValueError(f"Failed to read dataset file '{file_path}': {exc}") from exc
 
     total_rows = len(df)
     total_columns = len(df.columns)
