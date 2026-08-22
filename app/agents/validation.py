@@ -68,3 +68,15 @@ def validate_filter_count(obj: Dict[str, Any]) -> bool:
     if "count" not in obj or not isinstance(obj["count"], (int, float)):
         return False
     return True
+
+
+def validate_most_common(obj: Dict[str, Any]) -> bool:
+    if not isinstance(obj, dict):
+        return False
+    if obj.get("type") != "most_common":
+        return False
+    if "top_value" not in obj or "top_count" not in obj:
+        return False
+    if "distribution" not in obj or not isinstance(obj["distribution"], list):
+        return False
+    return True

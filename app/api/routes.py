@@ -211,7 +211,8 @@ def chat_with_agent(request: ChatRequest):
         if tool_history:
             last_payload = tool_history[-1].get("payload")
             if isinstance(last_payload, dict) and last_payload.get("type") in (
-                "dataset_summary", "anomalies", "chart", "save_report", "extreme_row", "filter_count"
+                "dataset_summary", "anomalies", "chart", "save_report",
+                "extreme_row", "filter_count", "most_common",
             ):
                 structured = last_payload
 

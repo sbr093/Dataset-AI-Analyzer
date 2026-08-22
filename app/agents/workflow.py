@@ -9,11 +9,11 @@ import json
 from app.agents.tools import analyze_dataset_tool
 from app.agents.tools import (
     summarize_dataset_tool, generate_chart_tool, detect_anomalies_tool,
-    save_report_tool, find_extreme_row_tool, filter_count_tool,
+    save_report_tool, find_extreme_row_tool, filter_count_tool, most_common_value_tool,
 )
 from app.agents.validation import (
     validate_chart, validate_dataset_summary, validate_anomalies,
-    validate_extreme_row, validate_filter_count,
+    validate_extreme_row, validate_filter_count, validate_most_common,
 )
 
 # 1. Initialize the LLM
@@ -29,6 +29,7 @@ llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0)
 tools = [
     analyze_dataset_tool, summarize_dataset_tool, generate_chart_tool,
     detect_anomalies_tool, save_report_tool, find_extreme_row_tool, filter_count_tool,
+    most_common_value_tool,
 ]
 llm_with_tools = llm.bind_tools(tools)
 
@@ -40,7 +41,8 @@ Tool guide:
 - summarize_dataset_tool: overall stats (rows, columns, missing values, duplicates, quality score).
 - generate_chart_tool: grouped averages/sums of a numeric column by a category column.
 - find_extreme_row_tool: the single row with the highest or lowest value in a column. Use this for "best/worst/highest/lowest <column>" questions, not generate_chart_tool.
-- filter_count_tool: count how many rows match a category value. Use this for "how many <category>" questions.
+- filter_count_tool: count how many rows match a category value you already know. Use this for "how many <category>" questions.
+- most_common_value_tool: the most frequent value(s) in a column, with counts. Use this for "most common/frequent/popular <column>" questions, not generate_chart_tool.
 - detect_anomalies_tool: statistical outliers.
 - save_report_tool: persist a generated summary for later lookup.
 """
@@ -93,6 +95,8 @@ def validate_tool_output(payload: dict) -> bool:
         return validate_extreme_row(payload)
     if payload.get("type") == "filter_count":
         return validate_filter_count(payload)
+    if payload.get("type") == "most_common":
+        return validate_most_common(payload)
     return False
 
 

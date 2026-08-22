@@ -251,6 +251,48 @@ def find_extreme_row_tool(file_path: str, target_column: str, mode: str = "max",
 
 
 @tool
+def most_common_value_tool(file_path: str, column: str, top_n: int = 5) -> dict:
+    """
+    Find the most frequent value(s) in a column, with counts.
+    Use this for "most common/frequent/popular <column>" questions, e.g. the most
+    common delay reason or the most popular payment mode. Not for numeric max/min
+    (use find_extreme_row_tool) or exact-match counting of one known value (use
+    filter_count_tool).
+    """
+    if not os.path.exists(file_path):
+        return {"error": "file_not_found"}
+
+    try:
+        df = load_dataframe(file_path)
+    except Exception as e:
+        return {"error": "read_failed", "message": str(e)}
+
+    resolved = _resolve_column(df, column)
+    if not resolved:
+        return {
+            "error": "unknown_column",
+            "message": f"'{column}' not found.",
+            "available_columns": df.columns.tolist(),
+        }
+
+    counts = df[resolved].dropna().astype(str).str.strip().value_counts()
+    if counts.empty:
+        return {"error": "no_data", "message": f"Column '{resolved}' has no non-missing values."}
+
+    top = counts.head(top_n)
+    distribution = [{"value": val, "count": int(cnt)} for val, cnt in top.items()]
+
+    return {
+        "type": "most_common",
+        "column": resolved,
+        "top_value": distribution[0]["value"],
+        "top_count": distribution[0]["count"],
+        "total_non_missing": int(counts.sum()),
+        "distribution": distribution,
+    }
+
+
+@tool
 def filter_count_tool(file_path: str, filter_column: str, filter_value: str) -> dict:
     """
     Count how many rows have filter_column equal to filter_value (case-insensitive).
