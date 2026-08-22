@@ -197,17 +197,17 @@ export default function App() {
             </h2>
             <form onSubmit={handleUpload} className="space-y-4">
               <div className="border-2 border-dashed border-white/20 rounded-xl p-6 text-center hover:bg-white/5 transition-colors cursor-pointer">
-                <input 
-                  type="file" 
-                  accept=".csv"
+                <input
+                  type="file"
+                  accept=".csv,.tsv,.xlsx,.xls,.json,.jsonl"
                   onChange={(e) => setFile(e.target.files[0])}
-                  className="hidden" 
-                  id="file-upload" 
+                  className="hidden"
+                  id="file-upload"
                 />
                 <label htmlFor="file-upload" className="cursor-pointer flex flex-col items-center">
                   <Upload size={32} className="text-gray-400 mb-2" />
                   <span className="text-sm text-gray-300">
-                    {file ? file.name : 'Click to select CSV'}
+                    {file ? file.name : 'Click to select a dataset (CSV, TSV, Excel, JSON)'}
                   </span>
                 </label>
               </div>
