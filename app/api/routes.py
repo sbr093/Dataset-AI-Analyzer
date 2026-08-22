@@ -5,7 +5,6 @@ import pandas as pd
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 from pydantic import BaseModel
-import json
 from sqlalchemy.orm import Session
 from langchain_core.messages import HumanMessage
 from fastapi.responses import FileResponse
@@ -201,16 +200,20 @@ def chat_with_agent(request: ChatRequest):
         }
 
         result = app_workflow.invoke(initial_state)
-        # Attempt to parse a structured JSON response if the agent returned one
         final_msg = result.get("messages", [])[ -1 ]
         content = getattr(final_msg, "content", "")
+
+        # The final message is always plain-language prose (per SYSTEM_PROMPT), so the
+        # structured payload comes from the last validated tool result instead of trying
+        # to parse the agent's natural-language reply as JSON.
         structured = None
-        try:
-            parsed = json.loads(content)
-            if isinstance(parsed, dict) and parsed.get("type") in ("dataset_summary", "anomalies", "chart", "save_report"):
-                structured = parsed
-        except Exception:
-            structured = None
+        tool_history = result.get("tool_history", [])
+        if tool_history:
+            last_payload = tool_history[-1].get("payload")
+            if isinstance(last_payload, dict) and last_payload.get("type") in (
+                "dataset_summary", "anomalies", "chart", "save_report", "extreme_row", "filter_count"
+            ):
+                structured = last_payload
 
         if structured:
             return {"response": content, "structured": structured}

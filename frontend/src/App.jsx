@@ -4,8 +4,8 @@ import {
   Upload, Database, AlertCircle, MessageSquare, 
   Send, Activity, Layers, Hash, FileCheck, Maximize2, FileText, Download, Info
 } from 'lucide-react';
-import { 
-  AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
+import {
+  AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 
 export default function App() {
@@ -137,7 +137,9 @@ export default function App() {
           dataset_summary: report.dataset_summary || {}
         }
       );
-      setChatHistory(prev => [...prev, { role: 'ai', content: response.data.response }]);
+      const structured = response.data.structured;
+      const chart = structured?.type === 'chart' ? structured : null;
+      setChatHistory(prev => [...prev, { role: 'ai', content: response.data.response, chart }]);
     } catch (error) {
       setChatHistory(prev => [...prev, { role: 'ai', content: 'Agentic automation system unavailable. Please verify backend connection.' }]);
     } finally {
@@ -400,6 +402,34 @@ export default function App() {
                     <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[85%] rounded-2xl p-3 text-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white/10 text-gray-200 rounded-bl-none'}`}>
                         {msg.content}
+                        {msg.chart && msg.chart.chart_data?.length > 0 && (
+                          <div className="mt-3 h-48 w-full min-w-[260px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={msg.chart.chart_data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                                <XAxis
+                                  dataKey={msg.chart.x}
+                                  stroke="#ffffff50"
+                                  axisLine={false}
+                                  tickLine={false}
+                                  tick={{ fill: '#94a3b8', fontSize: 10 }}
+                                />
+                                <YAxis
+                                  stroke="#ffffff50"
+                                  axisLine={false}
+                                  tickLine={false}
+                                  tick={{ fill: '#94a3b8', fontSize: 10 }}
+                                />
+                                <Tooltip
+                                  contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #ffffff10', borderRadius: '12px', color: '#fff' }}
+                                  itemStyle={{ color: '#e2e8f0' }}
+                                  labelStyle={{ color: '#94a3b8' }}
+                                />
+                                <Bar dataKey="value" name={msg.chart.y} fill="#6366f1" radius={[4, 4, 0, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))
