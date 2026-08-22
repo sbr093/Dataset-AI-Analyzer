@@ -1,42 +1,56 @@
 import os
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
-from langchain_ollama import ChatOllama
+from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage, HumanMessage
 from app.agents.state import AgentState
+from app.services.file_loader import load_dataframe
 import json
 from app.agents.tools import analyze_dataset_tool
-from app.agents.tools import summarize_dataset_tool, generate_chart_tool, detect_anomalies_tool, save_report_tool
-from app.agents.validation import validate_chart, validate_dataset_summary, validate_anomalies
+from app.agents.tools import (
+    summarize_dataset_tool, generate_chart_tool, detect_anomalies_tool,
+    save_report_tool, find_extreme_row_tool, filter_count_tool,
+)
+from app.agents.validation import (
+    validate_chart, validate_dataset_summary, validate_anomalies,
+    validate_extreme_row, validate_filter_count,
+)
 
 # 1. Initialize the LLM
 # We use a standard temperature of 0 for deterministic, analytical answers.
-# Initialize the local Ollama model
-llm = ChatOllama(model="llama3.1", temperature=0)
+# Initialize the local Groq model
+llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0)
 
-# Bind the tool to the LLM so it knows it can execute the Pandas logic
-tools = [analyze_dataset_tool, summarize_dataset_tool, generate_chart_tool, detect_anomalies_tool, save_report_tool]
+# Bind the tools to the LLM so it knows it can execute the Pandas logic.
+# tool_choice is left as "auto": Groq's API hard-rejects (400) any turn where
+# tool_choice="any" is set but the model responds in plain text instead of
+# calling a tool (e.g. "hi") - the system prompt is instructed enough for
+# gpt-oss-120b to reliably call a tool on real data questions without forcing.
+tools = [
+    analyze_dataset_tool, summarize_dataset_tool, generate_chart_tool,
+    detect_anomalies_tool, save_report_tool, find_extreme_row_tool, filter_count_tool,
+]
 llm_with_tools = llm.bind_tools(tools)
 
-# Provide the LLM a compact schema description for expected tool outputs to reduce hallucination
-TOOL_SCHEMA = """
-Tool outputs follow these JSON shapes (examples):
-- dataset_summary: {"type":"dataset_summary","rows":1234,"columns":12,"missing_values":10,"anomaly_count":2}
-- anomalies: {"type":"anomalies","count":3,"items":[{"column":"sales","row_index":123,"value":450.0,"reason":"zscore"}]}
-- chart: {"type":"chart","x":"region","y":"sales","chart_data":[{"region":"APAC","value":123.4,"count":10}],"insights":{}}
-- save_report: {"type":"save_report","id":42,"status":"ok"}
+# Plain-prose tool guide instead of raw JSON examples: embedding literal JSON
+# in the prompt reliably caused the model to imitate that JSON as its answer
+# text instead of issuing a real tool call.
+TOOL_GUIDE = """
+Tool guide:
+- summarize_dataset_tool: overall stats (rows, columns, missing values, duplicates, quality score).
+- generate_chart_tool: grouped averages/sums of a numeric column by a category column.
+- find_extreme_row_tool: the single row with the highest or lowest value in a column. Use this for "best/worst/highest/lowest <column>" questions, not generate_chart_tool.
+- filter_count_tool: count how many rows match a category value. Use this for "how many <category>" questions.
+- detect_anomalies_tool: statistical outliers.
+- save_report_tool: persist a generated summary for later lookup.
 """
 
 # 2. Define the System Prompt (Intent Guardrails & Persona)
-SYSTEM_PROMPT = """You are a Senior Data Analysis AI Assistant.
-You are working with CSV datasets and may use the available tools to answer user questions.
-Always follow this process:
-1. Identify whether the user is asking about dataset content, quality, anomalies, or charts.
-2. If the user asks about data details, prefer using tools first.
-3. When using a tool, invoke the best one for the job and keep output structured.
-4. Use `state.dataset_summary` and `state.tool_history` to avoid repeating work.
-5. If the user asks something outside data analysis, politely decline and stay on task.
-Do not hallucinate data."""
+SYSTEM_PROMPT = """You are a Senior Data Analysis AI Assistant working with a single active dataset (CSV, TSV, Excel, or JSON).
+For any question about the dataset, you must call one of the available tools to compute the real answer from the data.
+Never write out a tool call as text or JSON in your answer — always use the actual tool-calling mechanism.
+Never guess or hallucinate numbers; only state values a tool actually returned.
+Once a tool has returned a valid result, use it to answer in clear, plain language."""
 
 def collect_tool_results(state: AgentState) -> dict:
     messages = state.get("messages", [])
@@ -75,6 +89,10 @@ def validate_tool_output(payload: dict) -> bool:
         return validate_anomalies(payload)
     if payload.get("type") == "save_report":
         return "status" in payload and "id" in payload
+    if payload.get("type") == "extreme_row":
+        return validate_extreme_row(payload)
+    if payload.get("type") == "filter_count":
+        return validate_filter_count(payload)
     return False
 
 
@@ -98,42 +116,54 @@ def agent_node(state: AgentState):
     messages = state.get("messages", [])
     file_path = state.get("current_file_path", "")
     tool_history = state.get("tool_history", [])
-    
+    loop_count = state.get("loop_count", 0)
+
     # Dynamically inform the LLM of the active dataset path and past tool actions
-    dynamic_system_prompt = SYSTEM_PROMPT + "\n\n" + TOOL_SCHEMA
+    dynamic_system_prompt = SYSTEM_PROMPT + "\n\n" + TOOL_GUIDE
     if file_path:
         dynamic_system_prompt += (
             f"\n\nActive Dataset File Path: '{file_path}'\n"
             f"When invoking dataset analysis tools, always pass '{file_path}' as the file path parameter."
         )
+        # Ground the model in the real column names so it doesn't guess wrong
+        # capitalization/spacing (e.g. "car_model" instead of "Car Model").
+        if os.path.exists(file_path):
+            try:
+                columns = load_dataframe(file_path, nrows=0).columns.tolist()
+                dynamic_system_prompt += f"\nDataset columns: {', '.join(columns)}"
+            except Exception:
+                pass
 
     if tool_history:
-        dynamic_system_prompt += "\n\nPrevious tool outputs are available in state.tool_history. Use them to reason before calling a new tool."
+        dynamic_system_prompt += "\n\nPrevious tool results this turn:"
         for entry in tool_history[-3:]:
-            dynamic_system_prompt += f"\n- {entry.get('type', 'tool_output')}: {entry}"
-        dynamic_system_prompt += "\n"
-        
+            dynamic_system_prompt += f"\n- {entry.get('type', 'tool_output')}: {entry.get('payload')}"
+        dynamic_system_prompt += "\nIf these already answer the question, respond in plain language now instead of calling another tool."
+
     # Ensure the dynamic system message is at the beginning of the context
     if not messages or not isinstance(messages[0], SystemMessage):
         messages = [SystemMessage(content=dynamic_system_prompt)] + messages
     else:
         messages[0] = SystemMessage(content=dynamic_system_prompt)
-        
+
     response = llm_with_tools.invoke(messages)
-    return {"messages": [response]}
+    return {"messages": [response], "loop_count": loop_count + 1}
 
 # 4. Define Routing Logic
+MAX_AGENT_LOOPS = 4
+
 def should_continue(state: AgentState) -> str:
     messages = state.get("messages", [])
     last_message = messages[-1]
-    
+
+    # Hard cap so a forced tool call that keeps failing (e.g. bad params)
+    # can't loop indefinitely.
+    if state.get("loop_count", 0) >= MAX_AGENT_LOOPS:
+        return "end"
+
     # If the LLM decided it needs to call a tool, route to the ToolNode
     if last_message.tool_calls:
         return "continue"
-
-    # If a tool was just executed, allow one more agent interpretation pass
-    if state.get("last_tool_executed"):
-        return "end"
 
     return "end"
 

@@ -6,6 +6,7 @@ python-multipart
 # Data Processing
 pandas
 numpy
+openpyxl
 
 # Database ORM & Driver
 sqlalchemy
@@ -16,6 +17,7 @@ langgraph
 langchain
 langchain-openai
 langchain-google-genai
+langchain-groq
 
 # Config & Validation
 pydantic

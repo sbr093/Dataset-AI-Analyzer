@@ -15,6 +15,7 @@ from reportlab.pdfgen import canvas
 from app.database.connection import get_db
 from app.models.dataset import DatasetReport
 from app.services.data_analyzer import analyze_csv_data
+from app.services.file_loader import load_dataframe, SUPPORTED_EXTENSIONS
 from app.agents.workflow import app_workflow
 
 router = APIRouter()
@@ -55,11 +56,30 @@ def get_cached_dataset_report(db: Session, filename: str):
     )
 
 
+def build_summary_text(analysis_result: dict) -> str:
+    total_cells = analysis_result['total_rows'] * analysis_result['total_columns']
+    missing_pct = (analysis_result['total_missing_values'] / total_cells * 100) if total_cells > 0 else 0.0
+    return (
+        f"This dataset contains {analysis_result['total_rows']} rows and {analysis_result['total_columns']} columns, "
+        f"with a {analysis_result.get('data_quality_label', 'Unknown')} quality score of "
+        f"{analysis_result.get('data_quality_score', 0)}%. "
+        f"It includes {analysis_result['duplicate_rows']} duplicate row(s) and "
+        f"{analysis_result['total_missing_values']} missing value(s) "
+        f"({missing_pct:.1f}% of all cells). "
+        f"{analysis_result['anomaly_count']} anomalous row(s) were detected across "
+        f"{len(analysis_result.get('detailed_anomalies', {}))} numeric field(s)."
+    )
+
+
 @router.post("/upload")
 def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db), force_refresh: bool = False):
-    """Uploads a CSV, analyzes it via Pandas, and returns the exact frontend contract."""
-    if not file.filename.endswith(".csv"):
-        raise HTTPException(status_code=400, detail="Only CSV files are allowed.")
+    """Uploads a dataset file (CSV, TSV, Excel, or JSON), analyzes it via Pandas, and returns the exact frontend contract."""
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    if file_ext not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{file_ext}'. Allowed: {', '.join(sorted(SUPPORTED_EXTENSIONS))}",
+        )
 
     file_path = os.path.join(DATA_DIR, file.filename)
 
@@ -98,6 +118,7 @@ def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db), 
             "data_quality_breakdown": cached_report.data_quality_breakdown,
             "detailed_anomalies": cached_analysis_result["detailed_anomalies"],
             "statistical_summary": cached_report.statistical_summary,
+            "summary": build_summary_text(cached_analysis_result),
             "dataset_summary": build_dataset_summary(cached_analysis_result),
         }
 
@@ -123,20 +144,7 @@ def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db), 
     db.commit()
     db.refresh(db_report)
 
-    total_cells = analysis_result['total_rows'] * analysis_result['total_columns']
-    missing_pct = (analysis_result['total_missing_values'] / total_cells * 100) if total_cells > 0 else 0.0
-
-    summary = (
-        f"This dataset contains {analysis_result['total_rows']} rows and {analysis_result['total_columns']} columns, "
-        f"with a {analysis_result.get('data_quality_label', 'Unknown')} quality score of "
-        f"{analysis_result.get('data_quality_score', 0)}%. "
-        f"It includes {analysis_result['duplicate_rows']} duplicate row(s) and "
-        f"{analysis_result['total_missing_values']} missing value(s) "
-        f"({missing_pct:.1f}% of all cells). "
-        f"{analysis_result['anomaly_count']} anomalous row(s) were detected across "
-        f"{len(analysis_result.get('detailed_anomalies', {}))} numeric field(s)."
-    )
-
+    summary = build_summary_text(analysis_result)
     dataset_summary = build_dataset_summary(analysis_result)
 
     return {
@@ -189,6 +197,7 @@ def chat_with_agent(request: ChatRequest):
             "dataset_summary": request.dataset_summary or {},
             "tool_history": [],
             "last_tool_executed": False,
+            "loop_count": 0,
         }
 
         result = app_workflow.invoke(initial_state)
@@ -223,7 +232,7 @@ def get_visualization_data(
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail=f"Visualization file not found: {file_path}")
 
-        df = pd.read_csv(file_path)
+        df = load_dataframe(file_path)
         columns = df.columns.tolist()
         response = {"columns": columns}
 
@@ -308,7 +317,7 @@ def get_visualization_data(
 def generate_pdf_report(file_path: str):
     try:
         # Load the current dataset
-        df = pd.read_csv(file_path)
+        df = load_dataframe(file_path)
         
         # Define where the temporary PDF will be saved
         report_path = "data/Executive_Report.pdf"
