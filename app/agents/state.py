@@ -17,3 +17,6 @@ class AgentState(TypedDict):
 
     # Tracks whether a tool execution just happened so the workflow can react to it
     last_tool_executed: bool
+
+    # Counts agent reasoning passes within a single request, to cap forced tool-calling loops
+    loop_count: int

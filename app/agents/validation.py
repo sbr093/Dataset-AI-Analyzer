@@ -46,3 +46,25 @@ def validate_anomalies(obj: Dict[str, Any]) -> bool:
         if "column" not in it or "row_index" not in it:
             return False
     return True
+
+
+def validate_extreme_row(obj: Dict[str, Any]) -> bool:
+    if not isinstance(obj, dict):
+        return False
+    if obj.get("type") != "extreme_row":
+        return False
+    if "row" not in obj or not isinstance(obj["row"], dict):
+        return False
+    if "column" not in obj or "value" not in obj:
+        return False
+    return True
+
+
+def validate_filter_count(obj: Dict[str, Any]) -> bool:
+    if not isinstance(obj, dict):
+        return False
+    if obj.get("type") != "filter_count":
+        return False
+    if "count" not in obj or not isinstance(obj["count"], (int, float)):
+        return False
+    return True
